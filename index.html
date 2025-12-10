@@ -311,13 +311,13 @@
       </div>
 
       <div class="section">
-        <label>カラー（ドラッグで塗りつぶし）</label>
+        <label>カラー(ドラッグで塗りつぶし)</label>
         <input type="color" class="color-input" id="colorPicker" value="#000000" draggable="true">
         <button class="tool-btn" id="addToPalette" style="margin-top: 8px;">パレットに追加</button>
       </div>
 
       <div class="section">
-        <label>パレット（クリック選択/ドラッグで塗りつぶし）</label>
+        <label>パレット(クリック選択/ドラッグで塗りつぶし)</label>
         <div class="palette" id="palette"></div>
       </div>
 
@@ -364,6 +364,13 @@
         <button class="icon-btn danger" id="clear">クリア</button>
         <button class="icon-btn success" id="export">保存</button>
       </div>
+
+      <div class="btn-group" style="margin-top: 8px;">
+        <button class="icon-btn" id="exportProject">📁 プロジェクト保存</button>
+        <button class="icon-btn" id="importProjectBtn">📂 プロジェクト読込</button>
+      </div>
+
+      <input type="file" id="importProject" accept=".json" style="display:none">
 
       <div style="margin-top: 16px;">
         <small>右クリックで範囲選択<br>Ctrl+C/X/V でコピー/カット/ペースト<br>Ctrl+Z/Y で元に戻す/やり直す</small>
@@ -446,7 +453,67 @@
     const selectionOverlay = document.getElementById('selectionOverlay');
     const centerPanel = document.getElementById('centerPanel');
 
-    // Load saved state
+    // Export project to JSON file
+    function exportProject() {
+      const data = {
+        version: 1,
+        savedAt: new Date().toISOString(),
+        state: {
+          canvasSize,
+          zoom,
+          showGrid,
+          color,
+          bgColor,
+          palette,
+          frames,
+          activeFrameId,
+          fps
+        }
+      };
+
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'pixel-art-project.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // Load project from JSON data
+    function loadProjectState(state) {
+      canvasSize = state.canvasSize;
+      zoom = state.zoom;
+      showGrid = state.showGrid;
+      color = state.color;
+      bgColor = state.bgColor;
+      palette = state.palette;
+      frames = state.frames;
+      activeFrameId = state.activeFrameId;
+      fps = state.fps;
+
+      // Update UI
+      document.getElementById('canvasSize').value = canvasSize;
+      document.getElementById('zoom').value = zoom;
+      document.getElementById('zoomValue').textContent = zoom;
+      document.getElementById('showGrid').checked = showGrid;
+      document.getElementById('colorPicker').value = color;
+      document.getElementById('bgColorPicker').value = bgColor;
+      document.getElementById('fps').value = fps;
+      document.getElementById('fpsValue').textContent = fps;
+      centerPanel.style.background = bgColor;
+
+      updateFromActiveFrame();
+      initCanvas();
+      renderPalette();
+      renderFrames();
+      renderLayers();
+      initHistory();
+      drawCanvas();
+      saveState();
+    }
+
+    // Load saved state from localStorage
     function loadState() {
       try {
         const saved = localStorage.getItem(STORAGE_KEY);
@@ -480,7 +547,7 @@
       }
     }
 
-    // Save state
+    // Save state to localStorage
     function saveState() {
       try {
         const state = {
@@ -678,6 +745,12 @@
       document.getElementById('redo').disabled = historyIndex >= history.length - 1;
     }
 
+    function initHistory() {
+      history = [];
+      historyIndex = -1;
+      saveToHistory();
+    }
+
     function updateSelection(x, y) {
       if (!selection) return;
       
@@ -716,7 +789,6 @@
       }
       
       clipboard = { width, height, data };
-      
     }
 
     function cutSelection() {
@@ -765,23 +837,22 @@
       frames[frameIndex].layers = JSON.parse(JSON.stringify(layers));
       drawCanvas();
 
-      // Clear selection
       selection = null;
       selectionOverlay.style.display = 'none';
     }
 
-    // Event handlers
+    // Canvas event handlers
     canvas.addEventListener('mousedown', (e) => {
       const pos = getPixelPos(e);
       
-      if (e.button === 2) { // Right click
+      if (e.button === 2) {
         e.preventDefault();
         isSelecting = true;
         selection = { startX: pos.x, startY: pos.y };
         return;
       }
       
-      if (e.button !== 0) return; // Only left click
+      if (e.button !== 0) return;
       
       isDrawing = true;
       startPos = pos;
@@ -828,8 +899,12 @@
       }
       
       if (!isDrawing) return;
-　　　saveToHistory();
+      
       const pos = getPixelPos(e);
+      
+      if (tool === 'line' || tool === 'rect' || tool === 'rect-filled') {
+        saveToHistory();
+      }
       
       if (tool === 'line') {
         drawLine(startPos.x, startPos.y, pos.x, pos.y);
@@ -850,7 +925,6 @@
 
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
-    // Drag and drop color to canvas
     canvas.addEventListener('dragover', (e) => {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'copy';
@@ -923,7 +997,6 @@
       color = e.target.value;
     });
 
-    // Color picker drag
     document.getElementById('colorPicker').addEventListener('dragstart', (e) => {
       draggedColor = color;
     });
@@ -991,7 +1064,6 @@
     document.getElementById('canvasSize').addEventListener('change', (e) => {
       const newSize = parseInt(e.target.value);
       
-      // Resize all layers in all frames
       frames = frames.map(frame => ({
         ...frame,
         layers: frame.layers.map(layer => {
@@ -1132,13 +1204,41 @@
         }
       });
       
-      exportCanvas.toBlob(blob => {
+      exportCanvas.toBlob((blob) => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
         a.download = 'pixel-art.png';
         a.click();
+        URL.revokeObjectURL(url);
       });
+    });
+
+    // Project Export
+    document.getElementById('exportProject').addEventListener('click', () => {
+      exportProject();
+    });
+
+    // Project Import
+    document.getElementById('importProjectBtn').addEventListener('click', () => {
+      document.getElementById('importProject').click();
+    });
+
+    document.getElementById('importProject').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result);
+          if (!data.state) throw new Error('Invalid file');
+          loadProjectState(data.state);
+        } catch (err) {
+          alert('プロジェクトの読み込みに失敗しました');
+        }
+      };
+      reader.readAsText(file);
     });
 
     // Frames
@@ -1209,7 +1309,6 @@
         div.appendChild(content);
         list.appendChild(div);
         
-        // Drag and drop
         div.draggable = true;
         div.addEventListener('dragstart', (e) => {
           e.dataTransfer.effectAllowed = 'move';
@@ -1405,7 +1504,6 @@
         
         list.appendChild(div);
         
-        // Drag and drop
         div.draggable = true;
         div.addEventListener('dragstart', (e) => {
           e.dataTransfer.effectAllowed = 'move';
@@ -1435,12 +1533,6 @@
       });
     }
 
-function initHistory() {
-  history = [];
-  historyIndex = -1;
-  saveToHistory();
-}
-
     document.getElementById('addLayer').addEventListener('click', () => {
       const newId = Math.max(...layers.map(l => l.id)) + 1;
       const newLayer = {
@@ -1462,7 +1554,7 @@ function initHistory() {
 
     // Initialize
     loadState();
-　　initHistory(); 
+    initHistory();
     initCanvas();
     renderPalette();
     renderFrames();
