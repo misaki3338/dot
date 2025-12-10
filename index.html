@@ -893,30 +893,34 @@
     });
 
     canvas.addEventListener('mouseup', (e) => {
-      if (isSelecting) {
-        isSelecting = false;
-        return;
-      }
-      
-      if (!isDrawing) return;
-      
-      const pos = getPixelPos(e);
-      
-      if (tool === 'line' || tool === 'rect' || tool === 'rect-filled') {
-        saveToHistory();
-      }
-      
-      if (tool === 'line') {
-        drawLine(startPos.x, startPos.y, pos.x, pos.y);
-      } else if (tool === 'rect') {
-        drawRect(startPos.x, startPos.y, pos.x, pos.y, false);
-      } else if (tool === 'rect-filled') {
-        drawRect(startPos.x, startPos.y, pos.x, pos.y, true);
-      }
-      
-      isDrawing = false;
-      startPos = null;
-    });
+  if (isSelecting) {
+    isSelecting = false;
+    return;
+  }
+  
+  if (!isDrawing) return;
+  
+  const pos = getPixelPos(e);
+  
+  // ペンと消しゴム以外は履歴を保存
+  if (tool === 'line' || tool === 'rect' || tool === 'rect-filled') {
+    if (tool === 'line') {
+      drawLine(startPos.x, startPos.y, pos.x, pos.y);
+    } else if (tool === 'rect') {
+      drawRect(startPos.x, startPos.y, pos.x, pos.y, false);
+    } else if (tool === 'rect-filled') {
+      drawRect(startPos.x, startPos.y, pos.x, pos.y, true);
+    }
+  }
+  
+  // すべての描画ツールで履歴を保存
+  if (tool === 'pen' || tool === 'eraser' || tool === 'line' || tool === 'rect' || tool === 'rect-filled') {
+    saveToHistory();
+  }
+  
+  isDrawing = false;
+  startPos = null;
+});
 
     canvas.addEventListener('mouseleave', () => {
       isDrawing = false;
