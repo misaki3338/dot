@@ -126,8 +126,8 @@
       background: rgba(220, 38, 38, 0.9);
       border: none;
       color: white;
-      width: 18px;
-      height: 18px;
+      width: 14px;
+      height: 14px;
       border-radius: 3px;
       font-size: 12px;
       cursor: pointer;
@@ -814,7 +814,6 @@
     function pasteClipboard(atX, atY) {
       if (!clipboard) return;
       
-      saveToHistory();
       const layerIndex = layers.findIndex(l => l.id === activeLayerId);
       if (layerIndex === -1) return;
       
@@ -835,6 +834,7 @@
       
       const frameIndex = frames.findIndex(f => f.id === activeFrameId);
       frames[frameIndex].layers = JSON.parse(JSON.stringify(layers));
+      saveToHistory();
       drawCanvas();
 
       selection = null;
@@ -865,15 +865,19 @@
         const index = pos.y * canvasSize + pos.x;
         const targetColor = activeLayer.data[index];
         floodFill(pos.x, pos.y, targetColor, color);
-      } else if (tool === 'eyedropper') {
-        const activeLayer = layers.find(l => l.id === activeLayerId);
-        const index = pos.y * canvasSize + pos.x;
-        const pickedColor = activeLayer.data[index];
-        if (pickedColor) {
-          color = pickedColor;
-          document.getElementById('colorPicker').value = color;
-        }
-      }
+} else if (tool === 'eyedropper') {
+  const activeLayer = layers.find(l => l.id === activeLayerId);
+  const index = pos.y * canvasSize + pos.x;
+  const pickedColor = activeLayer.data[index];
+  if (pickedColor) {
+    color = pickedColor;
+    document.getElementById('colorPicker').value = color;
+    // 自動でペンツールに切り替え
+    tool = 'pen';
+    document.querySelectorAll('.tool-btn[data-tool]').forEach(b => b.classList.remove('active'));
+    document.querySelector('.tool-btn[data-tool="pen"]').classList.add('active');
+  }
+}
     });
 
     canvas.addEventListener('mousemove', (e) => {
@@ -929,6 +933,29 @@
 
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
+　　// マウスホイールでズーム
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  
+  const zoomSlider = document.getElementById('zoom');
+  let newZoom = zoom;
+  
+  if (e.deltaY < 0) {
+    // ホイールアップ（ズームイン）
+    newZoom = Math.min(parseInt(zoomSlider.max), zoom + 1);
+  } else {
+    // ホイールダウン（ズームアウト）
+    newZoom = Math.max(parseInt(zoomSlider.min), zoom - 1);
+  }
+  
+  if (newZoom !== zoom) {
+    zoom = newZoom;
+    zoomSlider.value = zoom;
+    document.getElementById('zoomValue').textContent = zoom;
+    initCanvas();
+  }
+});
+
     canvas.addEventListener('dragover', (e) => {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'copy';
@@ -949,6 +976,27 @@
 
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
+　　　// ツールのショートカット（1-7キー）
+  　　if (!e.ctrlKey && !e.metaKey) {
+    　　const toolMap = {
+     　　 '1': 'pen',
+    　　  '2': 'eraser',
+    　　  '3': 'fill',
+    　　  '4': 'eyedropper',
+    　　  '5': 'line',
+    　　  '6': 'rect',
+    　　  '7': 'rect-filled'
+  　　  };
+    
+  　  if (toolMap[e.key]) {
+ 　     e.preventDefault();
+ 　     tool = toolMap[e.key];
+   　   document.querySelectorAll('.tool-btn[data-tool]').forEach(b => b.classList.remove('active'));
+   　   document.querySelector(`.tool-btn[data-tool="${tool}"]`).classList.add('active');
+   　   return;
+ 　 　  }
+　　  }
+  
       if (e.ctrlKey || e.metaKey) {
         if (e.key === 'z') {
           e.preventDefault();
@@ -1134,7 +1182,6 @@
 
     // Flip
     document.getElementById('flipH').addEventListener('click', () => {
-      saveToHistory();
       layers = layers.map(layer => {
         const newData = [...layer.data];
         for (let y = 0; y < canvasSize; y++) {
@@ -1149,11 +1196,11 @@
       
       const frameIndex = frames.findIndex(f => f.id === activeFrameId);
       frames[frameIndex].layers = JSON.parse(JSON.stringify(layers));
+      saveToHistory();
       drawCanvas();
     });
 
     document.getElementById('flipV').addEventListener('click', () => {
-      saveToHistory();
       layers = layers.map(layer => {
         const newData = [...layer.data];
         for (let y = 0; y < canvasSize / 2; y++) {
@@ -1168,13 +1215,13 @@
       
       const frameIndex = frames.findIndex(f => f.id === activeFrameId);
       frames[frameIndex].layers = JSON.parse(JSON.stringify(layers));
+      saveToHistory();
       drawCanvas();
     });
 
     // Clear
     document.getElementById('clear').addEventListener('click', () => {
       if (confirm('キャンバスをクリアしますか?')) {
-        saveToHistory();
         const newLayers = layers.map(l => ({
           ...l,
           data: Array(canvasSize * canvasSize).fill(null)
@@ -1183,6 +1230,7 @@
         
         const frameIndex = frames.findIndex(f => f.id === activeFrameId);
         frames[frameIndex].layers = JSON.parse(JSON.stringify(layers));
+        saveToHistory();
         drawCanvas();
       }
     });
